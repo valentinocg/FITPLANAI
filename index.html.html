@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FitPlan AI</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --green: #1D9E75; --green-light: #E1F5EE; --green-mid: #5DCAA5; --green-dark: #0F6E56;
+    --amber: #EF9F27; --blue-light: #E6F1FB; --blue-dark: #185FA5;
+    --text: #1a1a1a; --text-muted: #6b7280; --text-faint: #9ca3af;
+    --bg: #f8f7f4; --bg-card: #ffffff;
+    --border: rgba(0,0,0,0.08); --border-strong: rgba(0,0,0,0.15);
+    --radius: 12px; --radius-sm: 8px; --radius-pill: 999px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+    --shadow-lg: 0 4px 24px rgba(0,0,0,0.1);
+  }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  .wrapper { min-height: 100vh; max-width: 520px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+
+  .app-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2.5rem; animation: fadeDown 0.5s ease both; }
+  .logo { font-family: 'DM Serif Display', serif; font-size: 26px; letter-spacing: -0.5px; display: flex; align-items: center; gap: 10px; }
+  .logo-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.3); opacity: 0.7; } }
+  .user-badge { display: flex; align-items: center; gap: 10px; }
+  .user-email { font-size: 12px; color: var(--text-muted); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn-logout { font-size: 12px; padding: 5px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-pill); background: transparent; color: var(--text-muted); cursor: pointer; font-family: inherit; transition: all 0.15s; }
+  .btn-logout:hover { background: var(--bg-card); color: var(--text); }
+
+  .screen { display: none; }
+  .screen.active { display: block; animation: fadeUp 0.35s ease both; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fadeDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+  .auth-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; box-shadow: var(--shadow); margin-top: 1rem; }
+  .auth-title { font-family: 'DM Serif Display', serif; font-size: 22px; margin-bottom: 6px; }
+  .auth-sub { font-size: 14px; color: var(--text-muted); margin-bottom: 1.75rem; font-weight: 300; }
+  .auth-tabs { display: flex; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+  .auth-tab { padding: 8px 20px; font-size: 14px; font-family: inherit; cursor: pointer; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-muted); margin-bottom: -1px; transition: all 0.15s; }
+  .auth-tab.active { color: var(--green-dark); border-bottom-color: var(--green); font-weight: 500; }
+
+  .progress-wrap { margin-bottom: 2rem; }
+  .progress-steps { display: flex; gap: 6px; margin-bottom: 8px; }
+  .progress-step { flex: 1; height: 3px; border-radius: 2px; background: var(--border); transition: background 0.4s ease; }
+  .progress-step.done { background: var(--green); }
+  .progress-step.active { background: var(--green-mid); }
+  .progress-label { font-size: 11px; color: var(--text-faint); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; }
+
+  .section-heading { font-family: 'DM Serif Display', serif; font-size: 22px; margin-bottom: 6px; line-height: 1.2; }
+  .section-sub { font-size: 14px; color: var(--text-muted); margin-bottom: 1.75rem; font-weight: 300; }
+
+  .field { margin-bottom: 1.25rem; }
+  .field label { display: block; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 7px; }
+  .field input, .field select { width: 100%; padding: 11px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 15px; color: var(--text); background: var(--bg-card); outline: none; transition: border-color 0.2s, box-shadow 0.2s; appearance: none; -webkit-appearance: none; }
+  .field input:focus, .field select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(29,158,117,0.12); }
+  .field select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; cursor: pointer; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .field-label-inline { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px; display: block; }
+
+  .chip-group { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.25rem; }
+  .chip { padding: 8px 16px; border-radius: var(--radius-pill); border: 1px solid var(--border-strong); font-size: 13px; cursor: pointer; background: var(--bg-card); color: var(--text); transition: all 0.18s ease; user-select: none; }
+  .chip:hover { border-color: var(--green-mid); color: var(--green-dark); background: var(--green-light); }
+  .chip.selected { background: var(--green); border-color: var(--green); color: #fff; font-weight: 500; }
+
+  .day-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 1.25rem; }
+  .day-btn { padding: 10px 0; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); font-size: 12px; font-weight: 500; cursor: pointer; background: var(--bg-card); color: var(--text-muted); text-align: center; transition: all 0.18s ease; user-select: none; }
+  .day-btn:hover { border-color: var(--green-mid); color: var(--green-dark); }
+  .day-btn.selected { background: var(--green); border-color: var(--green); color: #fff; font-weight: 600; }
+
+  .key-section { background: var(--green-light); border: 1px solid rgba(29,158,117,0.2); border-radius: var(--radius); padding: 1rem 1.25rem; margin-bottom: 1.25rem; }
+  .key-section-title { font-size: 13px; font-weight: 600; color: var(--green-dark); margin-bottom: 4px; }
+  .key-section-sub { font-size: 12px; color: var(--green-dark); opacity: 0.8; margin-bottom: 10px; }
+  .key-row { display: flex; gap: 8px; align-items: center; }
+  .key-row input { flex: 1; padding: 9px 12px; border: 1px solid rgba(29,158,117,0.3); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 14px; background: white; color: var(--text); outline: none; }
+  .key-row input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(29,158,117,0.15); }
+  .btn-save-key { padding: 9px 14px; background: var(--green); color: white; border: none; border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }
+  .btn-save-key:hover { opacity: 0.9; }
+  .key-saved-msg { font-size: 12px; margin-top: 6px; color: var(--green-dark); font-weight: 500; display: none; }
+
+  .btn-primary { width: 100%; padding: 14px; background: var(--green); color: #fff; border: none; border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 1.5rem; transition: background 0.2s, transform 0.1s; }
+  .btn-primary:hover { background: var(--green-dark); }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-ghost { width: 100%; padding: 12px; background: transparent; color: var(--text-muted); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 14px; cursor: pointer; margin-top: 10px; transition: all 0.18s; }
+  .btn-ghost:hover { background: var(--bg-card); color: var(--text); }
+
+  .loading-screen { min-height: 60vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
+  .spinner-wrap { position: relative; width: 60px; height: 60px; }
+  .spinner-outer { width: 60px; height: 60px; border: 2px solid var(--green-light); border-top-color: var(--green); border-radius: 50%; animation: spin 0.9s linear infinite; }
+  .spinner-inner { position: absolute; top: 10px; left: 10px; width: 40px; height: 40px; border: 2px solid transparent; border-bottom-color: var(--amber); border-radius: 50%; animation: spin 0.6s linear infinite reverse; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-title { font-family: 'DM Serif Display', serif; font-size: 20px; text-align: center; }
+  .loading-sub { font-size: 14px; color: var(--text-muted); text-align: center; }
+
+  .plan-hero { margin-bottom: 1.5rem; }
+  .plan-hero h1 { font-family: 'DM Serif Display', serif; font-size: 26px; margin-bottom: 6px; }
+  .plan-hero p { font-size: 14px; color: var(--text-muted); font-weight: 300; line-height: 1.5; }
+  .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.75rem; }
+  .summary-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 12px; text-align: center; }
+  .summary-card .s-val { font-size: 20px; font-weight: 600; color: var(--green-dark); }
+  .summary-card .s-lbl { font-size: 11px; color: var(--text-faint); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+  .week-grid { display: flex; flex-direction: column; gap: 10px; }
+  .day-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); transition: box-shadow 0.2s; }
+  .day-card:hover { box-shadow: var(--shadow-lg); }
+  .day-card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; cursor: pointer; user-select: none; }
+  .day-card-left { display: flex; align-items: center; gap: 12px; }
+  .day-initial { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+  .day-initial.training { background: var(--green-light); color: var(--green-dark); }
+  .day-initial.rest { background: #f3f4f6; color: var(--text-faint); }
+  .day-initial.active { background: var(--blue-light); color: var(--blue-dark); }
+  .day-name-text { font-size: 15px; font-weight: 500; }
+  .day-kcal { font-size: 12px; color: var(--text-faint); margin-top: 1px; }
+  .day-card-right { display: flex; align-items: center; gap: 10px; }
+  .day-tag { font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: var(--radius-pill); letter-spacing: 0.04em; }
+  .tag-training { background: var(--green-light); color: var(--green-dark); }
+  .tag-rest { background: #f3f4f6; color: var(--text-faint); }
+  .tag-active { background: var(--blue-light); color: var(--blue-dark); }
+  .chevron { width: 18px; height: 18px; color: var(--text-faint); transition: transform 0.25s ease; flex-shrink: 0; }
+  .chevron.open { transform: rotate(180deg); }
+  .day-card-body { display: none; padding: 0 16px 16px; border-top: 1px solid var(--border); }
+  .day-card-body.open { display: block; animation: fadeUp 0.25s ease both; }
+  .block-title { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); margin: 14px 0 8px; }
+  .ex-list { list-style: none; }
+  .ex-list li { font-size: 13px; padding: 7px 0; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 8px; }
+  .ex-list li:last-child { border-bottom: none; }
+  .ex-list li::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--green-mid); margin-top: 5px; flex-shrink: 0; }
+  .meal-list { list-style: none; }
+  .meal-list li { font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--border); line-height: 1.4; }
+  .meal-list li:last-child { border-bottom: none; }
+  .meal-type { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--amber); display: block; margin-bottom: 2px; }
+  .macro-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+  .macro-item { background: var(--bg); border-radius: var(--radius-sm); padding: 10px 8px; text-align: center; border: 1px solid var(--border); }
+  .macro-item .m-val { font-size: 16px; font-weight: 600; color: var(--green-dark); }
+  .macro-item .m-lbl { font-size: 10px; color: var(--text-faint); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+  .error-box { background: #fef2f2; border: 1px solid #fecaca; border-radius: var(--radius-sm); padding: 12px 16px; font-size: 13px; color: #991b1b; margin-top: 1rem; display: none; }
+  .success-box { background: var(--green-light); border: 1px solid rgba(29,158,117,0.3); border-radius: var(--radius-sm); padding: 12px 16px; font-size: 13px; color: var(--green-dark); margin-top: 1rem; display: none; }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <header class="app-header">
+    <div class="logo"><span class="logo-dot"></span> FitPlan AI</div>
+    <div class="user-badge" id="user-badge" style="display:none;">
+      <span class="user-email" id="user-email"></span>
+      <button class="btn-logout" id="btn-logout">Salir</button>
+    </div>
+  </header>
+
+  <!-- AUTH -->
+  <div id="screen-auth" class="screen active">
+    <div class="auth-card">
+      <div class="auth-title">Bienvenido</div>
+      <div class="auth-sub">Ingresá para acceder a tu plan desde cualquier dispositivo.</div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Iniciar sesión</button>
+        <button class="auth-tab" id="tab-register" onclick="switchTab('register')">Crear cuenta</button>
+      </div>
+      <div class="field"><label>Email</label><input type="email" id="auth-email" placeholder="tu@email.com" autocomplete="email" /></div>
+      <div class="field"><label>Contraseña</label><input type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password" /></div>
+      <div id="auth-error" class="error-box"></div>
+      <div id="auth-success" class="success-box"></div>
+      <button class="btn-primary" id="btn-auth">Iniciar sesión</button>
+    </div>
+  </div>
+
+  <!-- STEP 1 -->
+  <div id="screen-step1" class="screen">
+    <div class="progress-wrap">
+      <div class="progress-steps"><div class="progress-step active"></div><div class="progress-step"></div><div class="progress-step"></div></div>
+      <div class="progress-label">Paso 1 de 3 — Datos personales</div>
+    </div>
+    <h2 class="section-heading">Contanos sobre vos</h2>
+    <p class="section-sub">Usamos estos datos para calcular tu TDEE y macros ideales.</p>
+    <div class="field-row">
+      <div class="field"><label>Edad</label><input type="number" id="age" min="14" max="90" placeholder="25" /></div>
+      <div class="field"><label>Sexo biológico</label>
+        <select id="sex"><option value="">Seleccionar</option><option value="Masculino">Masculino</option><option value="Femenino">Femenino</option></select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Peso (kg)</label><input type="number" id="weight" min="30" max="300" placeholder="75" /></div>
+      <div class="field"><label>Altura (cm)</label><input type="number" id="height" min="100" max="250" placeholder="175" /></div>
+    </div>
+    <span class="field-label-inline">Objetivo principal</span>
+    <div class="chip-group" id="goal-chips">
+      <div class="chip" data-val="Perdida de grasa">Perdida de grasa</div>
+      <div class="chip" data-val="Ganancia de masa muscular">Ganancia muscular</div>
+      <div class="chip" data-val="Recomposicion corporal">Recomposicion</div>
+      <div class="chip" data-val="Mantenimiento y salud general">Mantenimiento</div>
+      <div class="chip" data-val="Mejorar resistencia cardiovascular">Resistencia</div>
+    </div>
+    <button class="btn-primary" id="btn-step1">Continuar</button>
+  </div>
+
+  <!-- STEP 2 -->
+  <div id="screen-step2" class="screen">
+    <div class="progress-wrap">
+      <div class="progress-steps"><div class="progress-step done"></div><div class="progress-step active"></div><div class="progress-step"></div></div>
+      <div class="progress-label">Paso 2 de 3 — Actividad y disponibilidad</div>
+    </div>
+    <h2 class="section-heading">Tu rutina actual</h2>
+    <p class="section-sub">Disenamos el plan a tu realidad, no al ideal.</p>
+    <div class="field"><label>Nivel de actividad</label>
+      <select id="activity">
+        <option value="">Seleccionar</option>
+        <option value="Sedentario (sin ejercicio)">Sedentario (sin ejercicio)</option>
+        <option value="Ligeramente activo (1-2 dias/semana)">Ligeramente activo (1-2 dias)</option>
+        <option value="Moderadamente activo (3-4 dias/semana)">Moderadamente activo (3-4 dias)</option>
+        <option value="Muy activo (5-6 dias/semana)">Muy activo (5-6 dias)</option>
+        <option value="Extremadamente activo (atleta o trabajo fisico)">Extremadamente activo</option>
+      </select>
+    </div>
+    <span class="field-label-inline">Dias disponibles para entrenar</span>
+    <div class="day-grid" id="days-grid">
+      <div class="day-btn" data-day="Lunes">Lun</div>
+      <div class="day-btn" data-day="Martes">Mar</div>
+      <div class="day-btn" data-day="Miercoles">Mie</div>
+      <div class="day-btn" data-day="Jueves">Jue</div>
+      <div class="day-btn" data-day="Viernes">Vie</div>
+      <div class="day-btn" data-day="Sabado">Sab</div>
+      <div class="day-btn" data-day="Domingo">Dom</div>
+    </div>
+    <div class="field"><label>Duracion por sesion</label>
+      <select id="duration">
+        <option value="">Seleccionar</option>
+        <option value="30 minutos">30 minutos</option>
+        <option value="45 minutos">45 minutos</option>
+        <option value="60 minutos">60 minutos</option>
+        <option value="90 minutos">90 minutos</option>
+      </select>
+    </div>
+    <span class="field-label-inline">Lugar de entrenamiento</span>
+    <div class="chip-group" id="place-chips">
+      <div class="chip" data-val="gimnasio con equipamiento completo">Gimnasio</div>
+      <div class="chip" data-val="casa con equipamiento basico">Casa</div>
+      <div class="chip" data-val="al aire libre">Al aire libre</div>
+      <div class="chip" data-val="sin equipamiento (solo peso corporal)">Sin equipo</div>
+    </div>
+    <button class="btn-primary" id="btn-step2">Continuar</button>
+    <button class="btn-ghost" id="btn-back1">Volver</button>
+  </div>
+
+  <!-- STEP 3 -->
+  <div id="screen-step3" class="screen">
+    <div class="progress-wrap">
+      <div class="progress-steps"><div class="progress-step done"></div><div class="progress-step done"></div><div class="progress-step active"></div></div>
+      <div class="progress-label">Paso 3 de 3 — Alimentacion</div>
+    </div>
+    <h2 class="section-heading">Preferencias alimentarias</h2>
+    <p class="section-sub">La nutricion es el 70% del resultado.</p>
+    <span class="field-label-inline">Restricciones alimentarias</span>
+    <div class="chip-group" id="diet-chips">
+      <div class="chip" data-val="sin restricciones">Sin restricciones</div>
+      <div class="chip" data-val="vegetariano">Vegetariano</div>
+      <div class="chip" data-val="vegano">Vegano</div>
+      <div class="chip" data-val="sin gluten">Sin gluten</div>
+      <div class="chip" data-val="sin lactosa">Sin lactosa</div>
+      <div class="chip" data-val="bajo en carbohidratos">Low carb</div>
+      <div class="chip" data-val="keto">Keto</div>
+    </div>
+    <span class="field-label-inline">Comidas por dia</span>
+    <div class="chip-group" id="meals-chips">
+      <div class="chip" data-val="2">2 comidas</div>
+      <div class="chip" data-val="3">3 comidas</div>
+      <div class="chip" data-val="4">4 comidas</div>
+      <div class="chip" data-val="5">5+ comidas</div>
+    </div>
+    <span class="field-label-inline">Presupuesto alimentario</span>
+    <div class="chip-group" id="budget-chips">
+      <div class="chip" data-val="economico (ingredientes basicos y accesibles)">Economico</div>
+      <div class="chip" data-val="moderado">Moderado</div>
+      <div class="chip" data-val="sin restriccion de presupuesto">Sin restriccion</div>
+    </div>
+    <div class="key-section">
+      <div class="key-section-title">API Key de Gemini</div>
+      <div class="key-section-sub" id="key-section-sub">Ingresa tu key — se guarda en tu cuenta y no la vas a tener que poner de nuevo. Gratis en aistudio.google.com</div>
+      <div class="key-row">
+        <input type="password" id="gemini-key" placeholder="AIza..." autocomplete="off" />
+        <button class="btn-save-key" id="btn-save-key">Guardar</button>
+      </div>
+      <div class="key-saved-msg" id="key-saved-msg">Key guardada en tu cuenta</div>
+    </div>
+    <div id="error-box" class="error-box"></div>
+    <button class="btn-primary" id="btn-generate">Generar mi plan semanal</button>
+    <button class="btn-ghost" id="btn-back2">Volver</button>
+  </div>
+
+  <!-- LOADING -->
+  <div id="screen-loading" class="screen">
+    <div class="loading-screen">
+      <div class="spinner-wrap"><div class="spinner-outer"></div><div class="spinner-inner"></div></div>
+      <div class="loading-title">Creando tu plan...</div>
+      <div class="loading-sub" id="loading-sub">Analizando tu perfil</div>
+    </div>
+  </div>
+
+  <!-- PLAN -->
+  <div id="screen-plan" class="screen">
+    <div class="plan-hero">
+      <h1 id="plan-title">Tu plan semanal</h1>
+      <p id="plan-resumen"></p>
+    </div>
+    <div class="summary-grid">
+      <div class="summary-card"><div class="s-val" id="s-kcal">-</div><div class="s-lbl">kcal / dia</div></div>
+      <div class="summary-card"><div class="s-val" id="s-train">-</div><div class="s-lbl">dias entreno</div></div>
+      <div class="summary-card"><div class="s-val" id="s-goal">-</div><div class="s-lbl">objetivo</div></div>
+    </div>
+    <div class="week-grid" id="week-grid"></div>
+    <div style="margin-top:2rem;">
+      <button class="btn-primary" id="btn-restart">Generar nuevo plan</button>
+    </div>
+  </div>
+
+</div>
+<script>
+  const SUPABASE_URL = 'https://xxfxnlgxthowbxopobfn.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_EB4bLctwQuyvDChPmaPsXw_dWlhAvU_';
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  const state = {};
+  let currentUser = null;
+
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function showError(elId, msg) {
+    const el = document.getElementById(elId);
+    el.textContent = msg;
+    el.style.display = 'block';
+    setTimeout(() => el.style.display = 'none', 7000);
+  }
+
+  function setupChips(id, multi) {
+    document.getElementById(id).querySelectorAll('.chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        if (multi) { chip.classList.toggle('selected'); }
+        else { chip.closest('.chip-group').querySelectorAll('.chip').forEach(c => c.classList.remove('selected')); chip.classList.add('selected'); }
+      });
+    });
+  }
+
+  function getChip(id) { const s = document.querySelector('#' + id + ' .chip.selected'); return s ? s.dataset.val : null; }
+  function getChips(id) { return [...document.querySelectorAll('#' + id + ' .chip.selected')].map(c => c.dataset.val); }
+
+  // AUTH
+  let authMode = 'login';
+  function switchTab(mode) {
+    authMode = mode;
+    document.getElementById('tab-login').classList.toggle('active', mode === 'login');
+    document.getElementById('tab-register').classList.toggle('active', mode === 'register');
+    document.getElementById('btn-auth').textContent = mode === 'login' ? 'Iniciar sesion' : 'Crear cuenta';
+    document.getElementById('auth-error').style.display = 'none';
+    document.getElementById('auth-success').style.display = 'none';
+  }
+
+  document.getElementById('btn-auth').addEventListener('click', async () => {
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const btn = document.getElementById('btn-auth');
+    if (!email || !password) { showError('auth-error', 'Completa email y contrasena.'); return; }
+    btn.disabled = true; btn.textContent = 'Cargando...';
+    try {
+      const result = authMode === 'login'
+        ? await sb.auth.signInWithPassword({ email, password })
+        : await sb.auth.signUp({ email, password });
+      if (result.error) throw result.error;
+      if (authMode === 'register' && result.data.user && !result.data.session) {
+        const box = document.getElementById('auth-success');
+        box.textContent = 'Cuenta creada. Revisa tu email para confirmar y luego inicia sesion.';
+        box.style.display = 'block';
+      }
+    } catch (err) {
+      showError('auth-error', err.message || 'Error de autenticacion.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = authMode === 'login' ? 'Iniciar sesion' : 'Crear cuenta';
+    }
+  });
+
+  document.getElementById('btn-logout').addEventListener('click', () => sb.auth.signOut());
+
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (session && session.user) {
+      currentUser = session.user;
+      document.getElementById('user-email').textContent = currentUser.email;
+      document.getElementById('user-badge').style.display = 'flex';
+      await loadGeminiKey();
+      showScreen('screen-step1');
+    } else {
+      currentUser = null;
+      document.getElementById('user-badge').style.display = 'none';
+      showScreen('screen-auth');
+    }
+  });
+
+  // GEMINI KEY
+  async function loadGeminiKey() {
+    if (!currentUser) return;
+    try {
+      const { data } = await sb.from('user_settings').select('gemini_key').eq('user_id', currentUser.id).single();
+      if (data && data.gemini_key) {
+        state.apiKey = data.gemini_key;
+        document.getElementById('gemini-key').value = data.gemini_key;
+        document.getElementById('key-saved-msg').style.display = 'block';
+        document.getElementById('key-section-sub').textContent = 'Key guardada en tu cuenta. Podes actualizarla cuando quieras.';
+      }
+    } catch (e) {}
+  }
+
+  async function saveGeminiKey(key) {
+    if (!currentUser) return;
+    await sb.from('user_settings').upsert({ user_id: currentUser.id, gemini_key: key, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    state.apiKey = key;
+    document.getElementById('key-saved-msg').style.display = 'block';
+    document.getElementById('key-section-sub').textContent = 'Key guardada en tu cuenta. Podes actualizarla cuando quieras.';
+  }
+
+  document.getElementById('btn-save-key').addEventListener('click', async () => {
+    const key = document.getElementById('gemini-key').value.trim();
+    if (!key) { showError('error-box', 'Ingresa la API Key antes de guardar.'); return; }
+    const btn = document.getElementById('btn-save-key');
+    btn.textContent = 'Guardando...'; btn.disabled = true;
+    await saveGeminiKey(key);
+    btn.textContent = 'Guardada'; btn.style.background = '#0F6E56';
+    setTimeout(() => { btn.textContent = 'Guardar'; btn.disabled = false; btn.style.background = ''; }, 2000);
+  });
+
+  // CHIPS & DAYS
+  setupChips('goal-chips', false);
+  setupChips('place-chips', false);
+  setupChips('diet-chips', true);
+  setupChips('meals-chips', false);
+  setupChips('budget-chips', false);
+  document.getElementById('days-grid').querySelectorAll('.day-btn').forEach(btn => btn.addEventListener('click', () => btn.classList.toggle('selected')));
+
+  // STEPS
+  document.getElementById('btn-step1').addEventListener('click', () => {
+    const age = document.getElementById('age').value.trim();
+    const sex = document.getElementById('sex').value;
+    const weight = document.getElementById('weight').value.trim();
+    const height = document.getElementById('height').value.trim();
+    const goal = getChip('goal-chips');
+    if (!age || !sex || !weight || !height || !goal) { alert('Completa todos los campos.'); return; }
+    Object.assign(state, { age, sex, weight, height, goal });
+    showScreen('screen-step2');
+  });
+
+  document.getElementById('btn-step2').addEventListener('click', () => {
+    const activity = document.getElementById('activity').value;
+    const days = [...document.querySelectorAll('#days-grid .day-btn.selected')].map(b => b.dataset.day);
+    const duration = document.getElementById('duration').value;
+    const place = getChip('place-chips');
+    if (!activity || days.length === 0 || !duration || !place) { alert('Completa todos los campos.'); return; }
+    Object.assign(state, { activity, days, duration, place });
+    showScreen('screen-step3');
+  });
+
+  document.getElementById('btn-back1').addEventListener('click', () => showScreen('screen-step1'));
+  document.getElementById('btn-back2').addEventListener('click', () => showScreen('screen-step2'));
+
+  // GENERATE
+  document.getElementById('btn-generate').addEventListener('click', async () => {
+    const diet = getChips('diet-chips');
+    const meals = getChip('meals-chips');
+    const budget = getChip('budget-chips');
+    const keyInput = document.getElementById('gemini-key').value.trim();
+    if (diet.length === 0 || !meals || !budget) { alert('Completa todos los campos.'); return; }
+    const apiKey = keyInput || state.apiKey;
+    if (!apiKey) { showError('error-box', 'Ingresa y guarda tu API Key de Gemini primero.'); return; }
+    if (keyInput && keyInput !== state.apiKey) await saveGeminiKey(keyInput);
+    Object.assign(state, { diet, meals, budget, apiKey });
+    showScreen('screen-loading');
+
+    const msgs = ['Analizando tu perfil...', 'Calculando TDEE y macros...', 'Disenando el entrenamiento...', 'Armando el plan nutricional...', 'Ajustando los detalles...'];
+    let li = 0;
+    const loadEl = document.getElementById('loading-sub');
+    const loadInterval = setInterval(() => { li = (li + 1) % msgs.length; loadEl.textContent = msgs[li]; }, 2200);
+
+    const prompt = 'Eres un experto en nutricion deportiva. Genera un plan semanal completo para esta persona.\n\nPERFIL:\n- Edad: ' + state.age + ' anios\n- Sexo: ' + state.sex + '\n- Peso: ' + state.weight + ' kg\n- Altura: ' + state.height + ' cm\n- Objetivo: ' + state.goal + '\n- Nivel de actividad: ' + state.activity + '\n- Dias de entrenamiento: ' + state.days.join(', ') + '\n- Duracion por sesion: ' + state.duration + '\n- Lugar: ' + state.place + '\n- Dieta: ' + state.diet.join(', ') + '\n- Comidas por dia: ' + state.meals + '\n- Presupuesto: ' + state.budget + '\n\nCalcula TDEE con Mifflin-St Jeor. Ajusta calorias al objetivo.\n\nResponde SOLO con JSON valido, sin backticks ni texto extra:\n{"tdee":2200,"objetivo":"Perdida de grasa","resumen":"Una oracion sobre el enfoque","dias":[{"nombre":"Lunes","tipo":"entrenamiento","ejercicios":["Sentadilla - 4x8","Press banca - 3x10"],"nutricion":{"kcal":1900,"proteinas":155,"carbohidratos":170,"grasas":58,"comidas":["Desayuno: descripcion","Almuerzo: descripcion","Cena: descripcion"]}}]}\n\nReglas:\n- 7 dias de la semana\n- Ejercicios solo en: ' + state.days.join(', ') + '\n- Resto de dias: tipo descanso o activo, sin campo ejercicios\n- Ejercicios acordes a: ' + state.place + '\n- Comidas acordes a: ' + state.diet.join(', ') + ', presupuesto ' + state.budget;
+
+    try {
+      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.7, maxOutputTokens: 4000 } })
+      });
+      const data = await res.json();
+      clearInterval(loadInterval);
+      if (data.error) throw new Error(data.error.message);
+      const raw = data.candidates[0].content.parts[0].text || '';
+      const plan = JSON.parse(raw.replace(/```json|```/g, '').trim());
+      renderPlan(plan);
+      showScreen('screen-plan');
+    } catch (err) {
+      clearInterval(loadInterval);
+      showScreen('screen-step3');
+      showError('error-box', 'Error generando el plan. Verifica tu API Key e intenta de nuevo.');
+      console.error(err);
+    }
+  });
+
+  function renderPlan(plan) {
+    const trainDays = plan.dias.filter(d => d.tipo === 'entrenamiento').length;
+    document.getElementById('plan-resumen').textContent = plan.resumen || '';
+    document.getElementById('s-kcal').textContent = (plan.tdee || '-').toLocaleString('es-AR');
+    document.getElementById('s-train').textContent = trainDays;
+    document.getElementById('s-goal').textContent = (plan.objetivo || '-').split(' ').slice(0, 2).join(' ');
+    const grid = document.getElementById('week-grid');
+    grid.innerHTML = '';
+    plan.dias.forEach(dia => {
+      const isT = dia.tipo === 'entrenamiento', isA = dia.tipo === 'activo';
+      const tc = isT ? 'training' : isA ? 'active' : 'rest';
+      const tagC = isT ? 'tag-training' : isA ? 'tag-active' : 'tag-rest';
+      const tagL = isT ? 'Entrenamiento' : isA ? 'Activo' : 'Descanso';
+      const n = dia.nutricion;
+      const exHTML = dia.ejercicios && dia.ejercicios.length ? '<div class="block-title">Ejercicios</div><ul class="ex-list">' + dia.ejercicios.map(e => '<li><span>' + e + '</span></li>').join('') + '</ul>' : '';
+      const mlHTML = n && n.comidas && n.comidas.length ? '<div class="block-title">Alimentacion</div><ul class="meal-list">' + n.comidas.map(m => { const p = m.split(':'); return p.length > 1 ? '<li><span class="meal-type">' + p[0] + '</span>' + p.slice(1).join(':').trim() + '</li>' : '<li>' + m + '</li>'; }).join('') + '</ul>' : '';
+      const macHTML = n ? '<div class="block-title">Macros</div><div class="macro-strip"><div class="macro-item"><div class="m-val">' + n.proteinas + 'g</div><div class="m-lbl">Proteinas</div></div><div class="macro-item"><div class="m-val">' + n.carbohidratos + 'g</div><div class="m-lbl">Carbos</div></div><div class="macro-item"><div class="m-val">' + n.grasas + 'g</div><div class="m-lbl">Grasas</div></div></div>' : '';
+      const card = document.createElement('div');
+      card.className = 'day-card';
+      card.innerHTML = '<div class="day-card-header" onclick="toggleCard(this)"><div class="day-card-left"><div class="day-initial ' + tc + '">' + dia.nombre.slice(0, 3).toUpperCase() + '</div><div><div class="day-name-text">' + dia.nombre + '</div><div class="day-kcal">' + (n ? n.kcal.toLocaleString('es-AR') + ' kcal' : '') + '</div></div></div><div class="day-card-right"><span class="day-tag ' + tagC + '">' + tagL + '</span><svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg></div></div><div class="day-card-body">' + exHTML + mlHTML + macHTML + '</div>';
+      grid.appendChild(card);
+    });
+  }
+
+  function toggleCard(header) {
+    const body = header.nextElementSibling;
+    const chevron = header.querySelector('.chevron');
+    const isOpen = body.classList.contains('open');
+    document.querySelectorAll('.day-card-body.open').forEach(b => b.classList.remove('open'));
+    document.querySelectorAll('.chevron.open').forEach(c => c.classList.remove('open'));
+    if (!isOpen) { body.classList.add('open'); chevron.classList.add('open'); }
+  }
+
+  document.getElementById('btn-restart').addEventListener('click', () => {
+    document.querySelectorAll('.chip.selected').forEach(c => c.classList.remove('selected'));
+    document.querySelectorAll('.day-btn.selected').forEach(b => b.classList.remove('selected'));
+    ['age','weight','height'].forEach(id => document.getElementById(id).value = '');
+    ['sex','activity','duration'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('week-grid').innerHTML = '';
+    showScreen('screen-step1');
+  });
+</script>
+</body>
+</html>
