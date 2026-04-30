@@ -70,15 +70,7 @@
   .day-btn:hover { border-color: var(--green-mid); color: var(--green-dark); }
   .day-btn.selected { background: var(--green); border-color: var(--green); color: #fff; font-weight: 600; }
 
-  .key-section { background: var(--green-light); border: 1px solid rgba(29,158,117,0.2); border-radius: var(--radius); padding: 1rem 1.25rem; margin-bottom: 1.25rem; }
-  .key-section-title { font-size: 13px; font-weight: 600; color: var(--green-dark); margin-bottom: 4px; }
-  .key-section-sub { font-size: 12px; color: var(--green-dark); opacity: 0.8; margin-bottom: 10px; }
-  .key-row { display: flex; gap: 8px; align-items: center; }
-  .key-row input { flex: 1; padding: 9px 12px; border: 1px solid rgba(29,158,117,0.3); border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 14px; background: white; color: var(--text); outline: none; }
-  .key-row input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(29,158,117,0.15); }
-  .btn-save-key { padding: 9px 14px; background: var(--green); color: white; border: none; border-radius: var(--radius-sm); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }
-  .btn-save-key:hover { opacity: 0.9; }
-  .key-saved-msg { font-size: 12px; margin-top: 6px; color: var(--green-dark); font-weight: 500; display: none; }
+
 
   .btn-primary { width: 100%; padding: 14px; background: var(--green); color: #fff; border: none; border-radius: var(--radius-sm); font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 1.5rem; transition: background 0.2s, transform 0.1s; }
   .btn-primary:hover { background: var(--green-dark); }
@@ -286,15 +278,7 @@
       <div class="chip" data-val="moderado">Moderado</div>
       <div class="chip" data-val="sin restriccion de presupuesto">Sin restriccion</div>
     </div>
-    <div class="key-section">
-      <div class="key-section-title">API Key de Gemini</div>
-      <div class="key-section-sub" id="key-section-sub">Ingresa tu key — se guarda en tu cuenta y no la vas a tener que poner de nuevo. Gratis en aistudio.google.com</div>
-      <div class="key-row">
-        <input type="password" id="gemini-key" placeholder="AIza..." autocomplete="off" />
-        <button class="btn-save-key" id="btn-save-key">Guardar</button>
-      </div>
-      <div class="key-saved-msg" id="key-saved-msg">Key guardada en tu cuenta</div>
-    </div>
+
     <div id="error-box" class="error-box"></div>
     <button class="btn-primary" id="btn-generate">Generar mi plan semanal</button>
     <button class="btn-ghost" id="btn-back2">Volver</button>
@@ -418,7 +402,6 @@
       currentUser = session.user;
       document.getElementById('user-email').textContent = currentUser.email;
       document.getElementById('user-badge').style.display = 'flex';
-      await loadGeminiKey();
       showScreen('screen-step1');
     } else {
       currentUser = null;
@@ -428,62 +411,9 @@
   });
 
   // GEMINI KEY
-  async function loadGeminiKey() {
-    if (!currentUser) return;
-    try {
-      const { data } = await sb.from('user_settings').select('gemini_key').eq('user_id', currentUser.id).single();
-      if (data && data.gemini_key) {
-        state.apiKey = data.gemini_key;
-        document.getElementById('gemini-key').value = data.gemini_key;
-        document.getElementById('key-saved-msg').style.display = 'block';
-        document.getElementById('key-section-sub').textContent = 'Key guardada en tu cuenta. Podes actualizarla cuando quieras.';
-      }
-    } catch (e) {}
-  }
 
-  async function saveGeminiKey(key) {
-    if (!currentUser) return;
-    try {
-      // Check if row exists, then insert or update
-      const { data: existing } = await sb.from('user_settings').select('id').eq('user_id', currentUser.id).single();
-      let error;
-      if (existing) {
-        const { error: updateError } = await sb.from('user_settings').update(
-          { gemini_key: key, updated_at: new Date().toISOString() }
-        ).eq('user_id', currentUser.id);
-        error = updateError;
-      } else {
-        const { error: insertError } = await sb.from('user_settings').insert(
-          { user_id: currentUser.id, gemini_key: key }
-        );
-        error = insertError;
-      }
-      if (error) throw error;
-      state.apiKey = key;
-      document.getElementById('key-saved-msg').style.display = 'block';
-      document.getElementById('key-section-sub').textContent = 'Key guardada en tu cuenta. Podes actualizarla cuando quieras.';
-      return true;
-    } catch(e) {
-      console.error('Error guardando key:', e);
-      return false;
-    }
-  }
 
-  document.getElementById('btn-save-key').addEventListener('click', async () => {
-    const key = document.getElementById('gemini-key').value.trim();
-    if (!key) { showError('error-box', 'Ingresa la API Key antes de guardar.'); return; }
-    const btn = document.getElementById('btn-save-key');
-    btn.textContent = 'Guardando...'; btn.disabled = true;
-    const ok = await saveGeminiKey(key);
-    if (ok) {
-      btn.textContent = 'Guardada'; btn.style.background = '#0F6E56';
-      setTimeout(() => { btn.textContent = 'Guardar'; btn.disabled = false; btn.style.background = ''; }, 2000);
-    } else {
-      btn.textContent = 'Error - reintenta'; btn.style.background = '#991b1b';
-      setTimeout(() => { btn.textContent = 'Guardar'; btn.disabled = false; btn.style.background = ''; }, 3000);
-      showError('error-box', 'No se pudo guardar la key. Verifica tu conexion e intenta de nuevo.');
-    }
-  });
+
 
   // CHIPS & DAYS
   setupChips('goal-chips', false);
@@ -523,12 +453,8 @@
     const diet = getChips('diet-chips');
     const meals = getChip('meals-chips');
     const budget = getChip('budget-chips');
-    const keyInput = document.getElementById('gemini-key').value.trim();
     if (diet.length === 0 || !meals || !budget) { alert('Completa todos los campos.'); return; }
-    const apiKey = keyInput || state.apiKey;
-    if (!apiKey) { showError('error-box', 'Ingresa y guarda tu API Key de Gemini primero.'); return; }
-    if (keyInput && keyInput !== state.apiKey) await saveGeminiKey(keyInput);
-    Object.assign(state, { diet, meals, budget, apiKey });
+    Object.assign(state, { diet, meals, budget });
     showScreen('screen-loading');
 
     const msgs = ['Analizando tu perfil...', 'Calculando TDEE y macros...', 'Disenando el entrenamiento...', 'Armando el plan nutricional...', 'Ajustando los detalles...'];
@@ -539,14 +465,14 @@
     const prompt = 'Eres un experto en nutricion deportiva. Genera un plan semanal completo para esta persona.\n\nPERFIL:\n- Edad: ' + state.age + ' anios\n- Sexo: ' + state.sex + '\n- Peso: ' + state.weight + ' kg\n- Altura: ' + state.height + ' cm\n- Objetivo: ' + state.goal + '\n- Nivel de actividad: ' + state.activity + '\n- Dias de entrenamiento: ' + state.days.join(', ') + '\n- Duracion por sesion: ' + state.duration + '\n- Lugar: ' + state.place + '\n- Dieta: ' + state.diet.join(', ') + '\n- Comidas por dia: ' + state.meals + '\n- Presupuesto: ' + state.budget + '\n\nCalcula TDEE con Mifflin-St Jeor. Ajusta calorias al objetivo.\n\nResponde SOLO con JSON valido, sin backticks ni texto extra:\n{"tdee":2200,"objetivo":"Perdida de grasa","resumen":"Una oracion sobre el enfoque","dias":[{"nombre":"Lunes","tipo":"entrenamiento","ejercicios":["Sentadilla - 4x8","Press banca - 3x10"],"nutricion":{"kcal":1900,"proteinas":155,"carbohidratos":170,"grasas":58,"comidas":["Desayuno: descripcion","Almuerzo: descripcion","Cena: descripcion"]}}]}\n\nReglas:\n- 7 dias de la semana\n- Ejercicios solo en: ' + state.days.join(', ') + '\n- Resto de dias: tipo descanso o activo, sin campo ejercicios\n- Ejercicios acordes a: ' + state.place + '\n- Comidas acordes a: ' + state.diet.join(', ') + ', presupuesto ' + state.budget;
 
     try {
-      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey, {
+      const res = await fetch('https://fitplan-gemini.valentino-cg1990.workers.dev', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.7, maxOutputTokens: 4000 } })
+        body: JSON.stringify({ prompt })
       });
       const data = await res.json();
       clearInterval(loadInterval);
-      if (data.error) throw new Error(data.error.message);
+      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
       const raw = data.candidates[0].content.parts[0].text || '';
       const plan = JSON.parse(raw.replace(/```json|```/g, '').trim());
       renderPlan(plan);
