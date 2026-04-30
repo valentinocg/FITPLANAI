@@ -418,10 +418,20 @@
 
   async function saveGeminiKey(key) {
     if (!currentUser) return;
-    await sb.from('user_settings').upsert({ user_id: currentUser.id, gemini_key: key, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
-    state.apiKey = key;
-    document.getElementById('key-saved-msg').style.display = 'block';
-    document.getElementById('key-section-sub').textContent = 'Key guardada en tu cuenta. Podes actualizarla cuando quieras.';
+    try {
+      const { error } = await sb.from('user_settings').upsert(
+        { user_id: currentUser.id, gemini_key: key, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      );
+      if (error) throw error;
+      state.apiKey = key;
+      document.getElementById('key-saved-msg').style.display = 'block';
+      document.getElementById('key-section-sub').textContent = 'Key guardada en tu cuenta. Podes actualizarla cuando quieras.';
+      return true;
+    } catch(e) {
+      console.error('Error guardando key:', e);
+      return false;
+    }
   }
 
   document.getElementById('btn-save-key').addEventListener('click', async () => {
@@ -429,9 +439,15 @@
     if (!key) { showError('error-box', 'Ingresa la API Key antes de guardar.'); return; }
     const btn = document.getElementById('btn-save-key');
     btn.textContent = 'Guardando...'; btn.disabled = true;
-    await saveGeminiKey(key);
-    btn.textContent = 'Guardada'; btn.style.background = '#0F6E56';
-    setTimeout(() => { btn.textContent = 'Guardar'; btn.disabled = false; btn.style.background = ''; }, 2000);
+    const ok = await saveGeminiKey(key);
+    if (ok) {
+      btn.textContent = 'Guardada'; btn.style.background = '#0F6E56';
+      setTimeout(() => { btn.textContent = 'Guardar'; btn.disabled = false; btn.style.background = ''; }, 2000);
+    } else {
+      btn.textContent = 'Error - reintenta'; btn.style.background = '#991b1b';
+      setTimeout(() => { btn.textContent = 'Guardar'; btn.disabled = false; btn.style.background = ''; }, 3000);
+      showError('error-box', 'No se pudo guardar la key. Verifica tu conexion e intenta de nuevo.');
+    }
   });
 
   // CHIPS & DAYS
