@@ -162,7 +162,16 @@
         <button class="auth-tab" id="tab-register" onclick="switchTab('register')">Crear cuenta</button>
       </div>
       <div class="field"><label>Email</label><input type="email" id="auth-email" placeholder="tu@email.com" autocomplete="email" /></div>
-      <div class="field"><label>Contraseña</label><input type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password" /></div>
+      <div class="field"><label>Contraseña</label>
+        <div style="position:relative;">
+          <input type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password" style="padding-right:44px;" />
+          <button type="button" id="toggle-pass" onclick="togglePass()" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:0;color:var(--text-faint);line-height:1;">
+            <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg id="eye-off-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+        <div id="pass-hint" style="font-size:12px;color:var(--text-faint);margin-top:5px;display:none;">Minimo 8 caracteres con letras y numeros</div>
+      </div>
       <div id="auth-error" class="error-box"></div>
       <div id="auth-success" class="success-box"></div>
       <button class="btn-primary" id="btn-auth">Iniciar sesión</button>
@@ -353,6 +362,14 @@
 
   // AUTH
   let authMode = 'login';
+  function togglePass() {
+    const input = document.getElementById('auth-password');
+    const isPass = input.type === 'password';
+    input.type = isPass ? 'text' : 'password';
+    document.getElementById('eye-icon').style.display = isPass ? 'none' : 'block';
+    document.getElementById('eye-off-icon').style.display = isPass ? 'block' : 'none';
+  }
+
   function switchTab(mode) {
     authMode = mode;
     document.getElementById('tab-login').classList.toggle('active', mode === 'login');
@@ -360,6 +377,7 @@
     document.getElementById('btn-auth').textContent = mode === 'login' ? 'Iniciar sesion' : 'Crear cuenta';
     document.getElementById('auth-error').style.display = 'none';
     document.getElementById('auth-success').style.display = 'none';
+    document.getElementById('pass-hint').style.display = mode === 'register' ? 'block' : 'none';
   }
 
   document.getElementById('btn-auth').addEventListener('click', async () => {
@@ -379,7 +397,14 @@
         box.style.display = 'block';
       }
     } catch (err) {
-      showError('auth-error', err.message || 'Error de autenticacion.');
+      let msg = err.message || 'Error de autenticacion.';
+      if (msg.includes('Password should be at least')) msg = 'La contrasena debe tener al menos 6 caracteres.';
+      if (msg.includes('weak_password') || msg.includes('422')) msg = 'Contrasena debil. Usa al menos 8 caracteres con letras y numeros.';
+      if (msg.includes('invalid_credentials') || msg.includes('Invalid login')) msg = 'Email o contrasena incorrectos.';
+      if (msg.includes('User already registered')) msg = 'Ya existe una cuenta con ese email. Usa Iniciar sesion.';
+      if (msg.includes('Email logins are disabled')) msg = 'El login por email esta desactivado en Supabase. Activa Email en Sign In / Providers.';
+      if (msg.includes('Signups not allowed')) msg = 'El registro esta desactivado. Activa Allow new users en Supabase.';
+      showError('auth-error', msg);
     } finally {
       btn.disabled = false;
       btn.textContent = authMode === 'login' ? 'Iniciar sesion' : 'Crear cuenta';
@@ -419,10 +444,20 @@
   async function saveGeminiKey(key) {
     if (!currentUser) return;
     try {
-      const { error } = await sb.from('user_settings').upsert(
-        { user_id: currentUser.id, gemini_key: key, updated_at: new Date().toISOString() },
-        { onConflict: 'user_id' }
-      );
+      // Check if row exists, then insert or update
+      const { data: existing } = await sb.from('user_settings').select('id').eq('user_id', currentUser.id).single();
+      let error;
+      if (existing) {
+        const { error: updateError } = await sb.from('user_settings').update(
+          { gemini_key: key, updated_at: new Date().toISOString() }
+        ).eq('user_id', currentUser.id);
+        error = updateError;
+      } else {
+        const { error: insertError } = await sb.from('user_settings').insert(
+          { user_id: currentUser.id, gemini_key: key }
+        );
+        error = insertError;
+      }
       if (error) throw error;
       state.apiKey = key;
       document.getElementById('key-saved-msg').style.display = 'block';
